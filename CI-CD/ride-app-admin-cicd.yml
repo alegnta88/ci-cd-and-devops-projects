@@ -1,0 +1,54 @@
+name: k-taxi backend
+
+on:
+
+  push:
+    branches:
+      - admin-api_ext
+
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Log in to Docker Hub
+      run: echo "rn3B6fAAYX.!xZV" | docker login -u "alegnta" --password-stdin
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: alegnta/k-taxi-backend:latest
+
+  deploy:
+      needs: build-and-push
+      runs-on: ubuntu-latest
+  
+      steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.VPS_KEY }}
+  
+      - name: Pull Docker image and deploy on VPS
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@147.182.241.168 << 'EOF'
+          docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+          docker stop ktaxi-backeend || true
+          docker rm ktaxi-backeend || true
+          docker rmi alegnta/k-taxi-backend:latest || true
+          docker pull alegnta/k-taxi-backend:latest
+          docker run -d --name ktaxi-backeend -p 8004:4001 alegnta/k-taxi-backend:latest
+          EOF
